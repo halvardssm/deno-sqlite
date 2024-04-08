@@ -1,10 +1,4 @@
-import { SQLITE3_DONE, SQLITE3_MISUSE, SQLITE3_OK } from "./constants.ts";
-import ffi from "./ffi.ts";
-
-const {
-  sqlite3_errmsg,
-  sqlite3_errstr,
-} = ffi;
+import { SqlxDatabaseError } from "@halvardm/sqlx";
 
 export const encoder = new TextEncoder();
 
@@ -16,7 +10,7 @@ export function isObject(value: unknown): boolean {
   return typeof value === "object" && value !== null;
 }
 
-export class SqliteError extends Error {
+export class SqliteError extends SqlxDatabaseError {
   name = "SqliteError";
 
   constructor(
@@ -24,22 +18,6 @@ export class SqliteError extends Error {
     message: string = "Unknown Error",
   ) {
     super(`${code}: ${message}`);
-  }
-}
-
-export function unwrap(code: number, db?: Deno.PointerValue): void {
-  if (code === SQLITE3_OK || code === SQLITE3_DONE) return;
-  if (code === SQLITE3_MISUSE) {
-    throw new SqliteError(code, "SQLite3 API misuse");
-  } else if (db !== undefined) {
-    const errmsg = sqlite3_errmsg(db);
-    if (errmsg === null) throw new SqliteError(code);
-    throw new Error(Deno.UnsafePointerView.getCString(errmsg));
-  } else {
-    throw new SqliteError(
-      code,
-      Deno.UnsafePointerView.getCString(sqlite3_errstr(code)!),
-    );
   }
 }
 

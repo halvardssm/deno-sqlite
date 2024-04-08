@@ -3,9 +3,6 @@ export {
   Database,
   type DatabaseOpenOptions,
   type FunctionOptions,
-  isComplete,
-  SQLITE_SOURCEID,
-  SQLITE_VERSION,
   type Transaction,
 } from "./src/database.ts";
 export { type BlobOpenOptions, SQLBlob } from "./src/blob.ts";
@@ -16,3 +13,4 @@ export {
   Statement,
 } from "./src/statement.ts";
 export { SqliteError } from "./src/util.ts";
+export { isComplete, SQLITE_SOURCEID, SQLITE_VERSION } from "./src/ffi.ts";

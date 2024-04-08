@@ -1,6 +1,6 @@
 import type { Database } from "./database.ts";
-import { readCstr, toCString, unwrap } from "./util.ts";
-import ffi from "./ffi.ts";
+import { readCstr, toCString } from "./util.ts";
+import ffi, { unwrap } from "./ffi.ts";
 import {
   SQLITE3_DONE,
   SQLITE3_ROW,

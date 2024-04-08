@@ -1,4 +1,4 @@
-import ffi from "./ffi.ts";
+import ffi, { unwrap } from "./ffi.ts";
 import { fromFileUrl } from "@std/path";
 import {
   SQLITE3_OPEN_CREATE,
@@ -11,7 +11,7 @@ import {
   SQLITE_NULL,
   SQLITE_TEXT,
 } from "./constants.ts";
-import { readCstr, toCString, unwrap } from "./util.ts";
+import { readCstr, toCString } from "./util.ts";
 import {
   type RestBindParameters,
   Statement,
@@ -83,9 +83,6 @@ const {
   sqlite3_get_autocommit,
   sqlite3_exec,
   sqlite3_free,
-  sqlite3_libversion,
-  sqlite3_sourceid,
-  sqlite3_complete,
   sqlite3_finalize,
   sqlite3_result_blob,
   sqlite3_result_double,
@@ -109,20 +106,6 @@ const {
   sqlite3_backup_finish,
   sqlite3_errcode,
 } = ffi;
-
-/** SQLite version string */
-export const SQLITE_VERSION: string = readCstr(sqlite3_libversion()!);
-/** SQLite source ID string */
-export const SQLITE_SOURCEID: string = readCstr(sqlite3_sourceid()!);
-
-/**
- * Whether the given SQL statement is complete.
- *
- * @param statement SQL statement string
- */
-export function isComplete(statement: string): boolean {
-  return Boolean(sqlite3_complete(toCString(statement)));
-}
 
 /**
  * Represents a SQLite3 database connection.
