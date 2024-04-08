@@ -182,6 +182,49 @@ Deno.test("sqlite", async (t) => {
     }
   });
 
+  await t.step("query array (iter)", () => {
+    const rows = [
+      ...db.prepare("select * from test where integer = ? limit 1").bind(0)
+        .valueMany<[number, string, number, Uint8Array, null]>(),
+    ];
+
+    assertEquals(rows.length, 1);
+
+    const row = rows[0];
+    assertEquals(row[0], 0);
+    assertEquals(row[1], "hello 0");
+    assertEquals(row[2], 3.14);
+    assertEquals(row[3], new Uint8Array([3, 2, 1]));
+    assertEquals(row[4], null);
+  });
+
+  await t.step("query object (iter)", () => {
+    const rows = [
+      ...db.prepare(
+        "select * from test where integer != ? and text != ?",
+      )
+        .bind(
+          1,
+          "hello world",
+        ).getMany<{
+        integer: number;
+        text: string;
+        double: number;
+        blob: Uint8Array;
+        nullable: null;
+      }>(),
+    ];
+
+    assertEquals(rows.length, 9);
+    for (const row of rows) {
+      assertEquals(typeof row.integer, "number");
+      assertEquals(row.text, `hello ${row.integer}`);
+      assertEquals(row.double, 3.14);
+      assertEquals(row.blob, new Uint8Array([3, 2, 1]));
+      assertEquals(row.nullable, null);
+    }
+  });
+
   await t.step("query json", () => {
     const row = db
       .prepare(
