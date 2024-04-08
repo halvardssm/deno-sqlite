@@ -1,4 +1,5 @@
 import {
+  BindValue,
   Database,
   isComplete,
   SQLITE_SOURCEID,
@@ -6,6 +7,8 @@ import {
   SqliteError,
 } from "../mod.ts";
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { SqliteConnection } from "../sqlx.ts";
+import { implementationTest } from "../../deno-sqlx/lib/testing.ts";
 
 console.log("sqlite version:", SQLITE_VERSION);
 
@@ -596,5 +599,262 @@ Deno.test("sqlite", async (t) => {
         Deno.removeSync(DB_URL);
       } catch (_) { /** ignore, already being used */ }
     },
+  });
+});
+
+Deno.test("sqlite sqlx", async (t) => {
+  await t.step("sourceid", () => {
+    assert(SQLITE_SOURCEID.length > 0);
+  });
+
+  await t.step("is complete", () => {
+    assert(!isComplete(""));
+    assert(!isComplete("select sqlite_version()"));
+
+    assert(isComplete("select x from y;"));
+    assert(isComplete("select sqlite_version();"));
+  });
+
+  const DB_URL = new URL("./test.db", import.meta.url);
+
+  // Remove any existing test.db.
+  await Deno.remove(DB_URL).catch(() => {});
+
+  await t.step("open (expect error)", async () => {
+    const db = new SqliteConnection(DB_URL, { create: false });
+    await assertRejects(
+      async () => await db.connect(),
+      SqliteError,
+      "14:",
+    );
+  });
+
+  await t.step("open (path string)", async () => {
+    const db = new SqliteConnection("test-path.db");
+    await db.connect();
+    await db.close();
+    Deno.removeSync("test-path.db");
+  });
+
+  await t.step("open (readonly)", async () => {
+    const db = new SqliteConnection(":memory:", { readonly: true });
+    await db.connect();
+    await db.close();
+  });
+
+  let db!: SqliteConnection;
+  await t.step("open (url)", async () => {
+    db = new SqliteConnection(DB_URL, { int64: true });
+    await db.connect();
+  });
+
+  if (typeof db !== "object") throw new Error("db open failed");
+
+  await t.step("execute pragma", async () => {
+    await db.execute("pragma journal_mode = WAL");
+    await db.execute("pragma synchronous = normal");
+    assertEquals(await db.execute("pragma temp_store = memory"), 0);
+  });
+
+  await t.step("select version (row as array)", async () => {
+    const row = await db.queryOneArray<[string]>("select sqlite_version()");
+    assertEquals(row, [SQLITE_VERSION]);
+  });
+
+  await t.step("select version (row as object)", async () => {
+    const row = await db.queryOne<
+      { version: string }
+    >("select sqlite_version() as version");
+    assertEquals(row, { version: SQLITE_VERSION });
+  });
+
+  await t.step("autocommit", () => {
+    assertEquals(db.autocommit, true);
+  });
+
+  await t.step("last insert row id", () => {
+    assertEquals(db.lastInsertRowId, 0);
+  });
+
+  await t.step("create table", async () => {
+    await db.execute(`create table test (
+      integer integer,
+      text text not null,
+      double double,
+      blob blob not null,
+      nullable integer
+    )`);
+  });
+
+  await t.step("insert one", async () => {
+    await db.execute(
+      `insert into test (integer, text, double, blob, nullable)
+      values (?, ?, ?, ?, ?)`,
+      [
+        0,
+        "hello world",
+        3.14,
+        new Uint8Array([1, 2, 3]),
+        null,
+      ],
+    );
+
+    assertEquals(db.totalChanges, 1);
+  });
+
+  await t.step("delete inserted row", async () => {
+    await db.execute("delete from test where integer = 0");
+  });
+
+  await t.step("last insert row id (after insert)", () => {
+    assertEquals(db.lastInsertRowId, 1);
+  });
+
+  await t.step("prepared insert", async () => {
+    const SQL = `insert into test (integer, text, double, blob, nullable)
+    values (?, ?, ?, ?, ?)`;
+
+    const rows: BindValue[][] = [];
+    for (let i = 0; i < 10; i++) {
+      rows.push([
+        i,
+        `hello ${i}`,
+        3.14,
+        new Uint8Array([3, 2, 1]),
+        null,
+      ]);
+    }
+
+    let changes = 0;
+    await db.transaction(async (t) => {
+      for (const row of rows) {
+        changes += await t.execute(SQL, row);
+      }
+    });
+
+    assertEquals(changes, 10);
+  });
+
+  await t.step("query array", async () => {
+    const rows = await db.queryArray<
+      [number, string, number, Uint8Array, null]
+    >("select * from test where integer = 0 limit 1");
+
+    assertEquals(rows.length, 1);
+    const row = rows[0];
+    assertEquals(row[0], 0);
+    assertEquals(row[1], "hello 0");
+    assertEquals(row[2], 3.14);
+    assertEquals(row[3], new Uint8Array([3, 2, 1]));
+    assertEquals(row[4], null);
+  });
+
+  await t.step("query object", async () => {
+    const rows = await db.query<{
+      integer: number;
+      text: string;
+      double: number;
+      blob: Uint8Array;
+      nullable: null;
+    }>(
+      "select * from test where integer != ? and text != ?",
+      [
+        1,
+        "hello world",
+      ],
+    );
+
+    assertEquals(rows.length, 9);
+    for (const row of rows) {
+      assertEquals(typeof row.integer, "number");
+      assertEquals(row.text, `hello ${row.integer}`);
+      assertEquals(row.double, 3.14);
+      assertEquals(row.blob, new Uint8Array([3, 2, 1]));
+      assertEquals(row.nullable, null);
+    }
+  });
+
+  await t.step("query array (iter)", async () => {
+    const rows = [];
+    for await (
+      const row of await db.queryManyArray<
+        [number, string, number, Uint8Array, null]
+      >("select * from test where integer = ? limit 1", [0])
+    ) {
+      rows.push(row);
+    }
+
+    assertEquals(rows.length, 1);
+
+    const row = rows[0];
+    assertEquals(row[0], 0);
+    assertEquals(row[1], "hello 0");
+    assertEquals(row[2], 3.14);
+    assertEquals(row[3], new Uint8Array([3, 2, 1]));
+    assertEquals(row[4], null);
+  });
+
+  await t.step("query object (iter)", async () => {
+    const rows = [];
+    for await (
+      const row of await db.queryMany<{
+        integer: number;
+        text: string;
+        double: number;
+        blob: Uint8Array;
+        nullable: null;
+      }>("select * from test where integer != ? and text != ?", [
+        1,
+        "hello world",
+      ])
+    ) {
+      rows.push(row);
+    }
+
+    assertEquals(rows.length, 9);
+    for (const row of rows) {
+      assertEquals(typeof row.integer, "number");
+      assertEquals(row.text, `hello ${row.integer}`);
+      assertEquals(row.double, 3.14);
+      assertEquals(row.blob, new Uint8Array([3, 2, 1]));
+      assertEquals(row.nullable, null);
+    }
+  });
+
+  await t.step("tagged template object", async () => {
+    assertEquals(await db.sql`select 1, 2, 3`, [{ "1": 1, "2": 2, "3": 3 }]);
+    assertEquals(
+      await db.sql`select ${1} as a, ${Math.PI} as b, ${new Uint8Array([
+        1,
+        2,
+      ])} as c`,
+      [
+        { a: 1, b: 3.141592653589793, c: new Uint8Array([1, 2]) },
+      ],
+    );
+
+    assertEquals(await db.sql`select ${"1; DROP TABLE"}`, [{
+      "?": "1; DROP TABLE",
+    }]);
+  });
+
+  await t.step({
+    name: "close",
+    sanitizeResources: false,
+    fn(): void {
+      db.close();
+      try {
+        Deno.removeSync(DB_URL);
+      } catch (_) { /** ignore, already being used */ }
+    },
+  });
+});
+
+Deno.test("sqlite sqlx implementation", async (t) => {
+  await implementationTest({
+    t,
+    connectionUrl: ":memory:",
+    connectionOptions: { poolSize: 1 },
+    Client: SqliteConnection,
   });
 });
