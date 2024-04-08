@@ -3,7 +3,10 @@
   "version": "0.11.2",
   "github": "https://github.com/denodrivers/sqlite3",
 
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./sqlx": "./sqlx/mod.ts"
+  },
 
   "exclude": [
     "sqlite",
