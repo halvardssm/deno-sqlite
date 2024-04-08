@@ -1,5 +1,5 @@
 import meta from "../deno.json" with { type: "json" };
-import { dlopen } from "../deps.ts";
+import { dlopen } from "@denosaurs/plug";
 
 const symbols = {
   sqlite3_open_v2: {

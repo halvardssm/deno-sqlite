@@ -45,5 +45,9 @@
         "explicit-module-boundary-types"
       ]
     }
+  },
+  "imports": {
+    "@denosaurs/plug": "jsr:@denosaurs/plug@^1.0.5",
+    "@std/path": "jsr:@std/path@^0.217.0"
   }
 }

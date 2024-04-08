@@ -1,5 +1,5 @@
 import ffi from "./ffi.ts";
-import { fromFileUrl } from "../deps.ts";
+import { fromFileUrl } from "@std/path";
 import {
   SQLITE3_OPEN_CREATE,
   SQLITE3_OPEN_MEMORY,
