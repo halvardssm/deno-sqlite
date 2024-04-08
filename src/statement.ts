@@ -762,8 +762,7 @@ export class Statement {
     return readCstr(sqlite3_expanded_sql(this.#handle)!);
   }
 
-  /** Iterate over resultant rows from query. */
-  *[Symbol.iterator](): IterableIterator<any> {
+  *getMany<T extends Record<string, unknown>>(): IterableIterator<T> {
     this.#begin();
     const getRowObject = this.getRowObject();
     let status;
@@ -784,6 +783,49 @@ export class Statement {
       unwrap(status, this.db.unsafeHandle);
     }
     sqlite3_reset(this.#handle);
+  }
+
+  *valueMany<T extends Array<unknown>>(): IterableIterator<T> {
+    const handle = this.#handle;
+    const callback = this.callback;
+    this.#begin();
+    const columnCount = sqlite3_column_count(handle);
+    const getRowArray = new Function(
+      "getColumn",
+      `
+      return function(h) {
+        return [${
+        Array.from({ length: columnCount }).map((_, i) =>
+          `getColumn(h, ${i}, ${this.db.int64})`
+        )
+          .join(", ")
+      }];
+      };
+      `,
+    )(getColumn);
+    let status;
+    if (callback) {
+      status = sqlite3_step_cb(handle);
+    } else {
+      status = sqlite3_step(handle);
+    }
+    while (status === SQLITE3_ROW) {
+      yield getRowArray(handle);
+      if (callback) {
+        status = sqlite3_step_cb(handle);
+      } else {
+        status = sqlite3_step(handle);
+      }
+    }
+    if (status !== SQLITE3_DONE) {
+      unwrap(status, this.db.unsafeHandle);
+    }
+    sqlite3_reset(handle);
+  }
+
+  /** Iterate over resultant rows from query. */
+  [Symbol.iterator](): IterableIterator<any> {
+    return this.getMany();
   }
 
   [Symbol.dispose](): void {
