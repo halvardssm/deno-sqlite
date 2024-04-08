@@ -48,6 +48,8 @@
   },
   "imports": {
     "@denosaurs/plug": "jsr:@denosaurs/plug@^1.0.5",
+    "@halvardm/sqlx": "jsr:@halvardm/sqlx@0.0.0-8",
+    "@std/assert": "jsr:@std/assert@^0.221.0",
     "@std/path": "jsr:@std/path@^0.217.0"
   }
 }

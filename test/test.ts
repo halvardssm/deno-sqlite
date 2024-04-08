@@ -5,7 +5,7 @@ import {
   SQLITE_VERSION,
   SqliteError,
 } from "../mod.ts";
-import { assert, assertEquals, assertThrows } from "./deps.ts";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 
 console.log("sqlite version:", SQLITE_VERSION);
 
