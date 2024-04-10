@@ -159,7 +159,7 @@ export class Prepared
     options?: SqliteQueryOptions | undefined,
   ): Promise<AsyncIterable<T>> {
     return transformToAsyncIterable(
-      this.#statement.bind(params ?? []).getMany<T>(options),
+      this.#statement.getMany<T>(params, options),
     );
   }
   queryArray<T extends ArrayRow<BindValue> = ArrayRow<BindValue>>(
@@ -179,7 +179,7 @@ export class Prepared
     options?: SqliteQueryOptions | undefined,
   ): Promise<AsyncIterable<T>> {
     return transformToAsyncIterable(
-      this.#statement.bind(params ?? []).valueMany<T>(options),
+      this.#statement.valueMany<T>(params, options),
     );
   }
 }

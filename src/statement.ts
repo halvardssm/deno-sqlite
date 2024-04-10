@@ -673,14 +673,8 @@ export class Statement {
     const mergedOptions = this.#getOptions(options);
     const handle = this.#handle;
     const arr = new Array(sqlite3_column_count(handle));
-    sqlite3_reset(handle);
-    if (!this.#hasNoArgs && !this.#bound) {
-      sqlite3_clear_bindings(handle);
-      this.#bindRefs.clear();
-      if (params.length) {
-        this.#bindAll(params);
-      }
-    }
+    this.#begin();
+    this.#bindAll(params);
 
     let status;
     if (this.callback) {
@@ -764,14 +758,8 @@ export class Statement {
     const columnNames = this.columnNames(options);
 
     const row: Record<string, unknown> = {};
-    sqlite3_reset(handle);
-    if (!this.#hasNoArgs && !this.#bound) {
-      sqlite3_clear_bindings(handle);
-      this.#bindRefs.clear();
-      if (params.length) {
-        this.#bindAll(params);
-      }
-    }
+    this.#begin();
+    this.#bindAll(params);
 
     let status;
     if (this.callback) {
@@ -842,9 +830,13 @@ export class Statement {
    * Iterate over resultant rows from query as objects.
    */
   *getMany<T extends Record<string, unknown>>(
+    params?: BindParameters,
     options?: StatementOptions,
   ): IterableIterator<T> {
     this.#begin();
+    if (!this.#bound && !this.#hasNoArgs && params?.length) {
+      this.#bindAll(params);
+    }
     const getRowObject = this.getRowObject(options);
     let status;
     if (this.callback) {
@@ -870,12 +862,16 @@ export class Statement {
    * Iterate over resultant rows from query as arrays.
    */
   *valueMany<T extends Array<unknown>>(
+    params?: BindParameters,
     options?: StatementOptions,
   ): IterableIterator<T> {
     const mergedOptions = this.#getOptions(options);
     const handle = this.#handle;
     const callback = this.callback;
     this.#begin();
+    if (!this.#bound && !this.#hasNoArgs && params?.length) {
+      this.#bindAll(params);
+    }
     const columnCount = sqlite3_column_count(handle);
     const getRowArray = new Function(
       "getColumn",
