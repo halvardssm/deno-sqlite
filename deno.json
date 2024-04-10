@@ -26,6 +26,7 @@
     "bench-c": "./bench/bench 50 1000000",
     "bench-python": "python ./bench/bench_python.py",
     "bench:northwind": "deno bench -A --unstable-ffi bench/northwind/deno.js",
+    "bench-sqlx:northwind": "deno bench -A --unstable-ffi bench/northwind/deno.js",
     "bench-wasm:northwind": "deno run -A --unstable-ffi bench/northwind/deno_wasm.js",
     "bench-node:northwind": "node bench/northwind/node.mjs",
     "bench-bun:northwind": "bun run bench/northwind/bun.js"
