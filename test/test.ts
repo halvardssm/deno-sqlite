@@ -8,7 +8,7 @@ import {
 } from "../mod.ts";
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { SqliteConnection } from "../sqlx.ts";
-import { implementationTest } from "../../deno-sqlx/lib/testing.ts";
+import { implementationTest } from "@halvardm/sqlx/testing";
 
 console.log("sqlite version:", SQLITE_VERSION);
 
