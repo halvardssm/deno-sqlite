@@ -1,11 +1,12 @@
-import type {
-  ArrayRow,
-  Row,
-  SqlxQueriable,
-  SqlxQueryOptions,
-  SqlxTransactionable,
-  SqlxTransactionOptions,
-  SqlxTransactionQueriable,
+import {
+  type ArrayRow,
+  type Row,
+  type SqlxQueriable,
+  type SqlxQueryOptions,
+  type SqlxTransactionable,
+  type SqlxTransactionOptions,
+  type SqlxTransactionQueriable,
+  VERSION,
 } from "@halvardm/sqlx";
 import type { BindValue } from "../mod.ts";
 import { Statement, type StatementOptions } from "./sqlx-statement.ts";
@@ -29,7 +30,8 @@ export interface TransactionOptions extends SqlxTransactionOptions {
  * See `Database#prepare` for more information.
  */
 export class Queriable implements SqlxQueriable<BindValue, QueryOptions> {
-  queryOptions: QueryOptions;
+  readonly sqlxVersion = VERSION;
+  readonly queryOptions: QueryOptions;
   protected handle: Deno.PointerValue = null;
 
   constructor(
@@ -157,6 +159,7 @@ export class Queriable implements SqlxQueriable<BindValue, QueryOptions> {
 export class Transaction extends Queriable
   implements
     SqlxTransactionQueriable<BindValue, QueryOptions, TransactionOptions> {
+  readonly sqlxVersion = VERSION;
   constructor(handle: Deno.PointerValue, options?: QueryOptions) {
     super(options);
     this.handle = handle;
@@ -190,6 +193,7 @@ export class Transactionable extends Queriable implements
     TransactionOptions,
     Transaction
   > {
+  readonly sqlxVersion = VERSION;
   async beginTransaction(
     options?: TransactionOptions["beginTransactionOptions"],
   ): Promise<Transaction> {

@@ -21,6 +21,7 @@ import {
   type SqlxConnectionEventType,
   type SqlxConnectionOptions,
   type SqlxTransactionOptions,
+  VERSION,
 } from "@halvardm/sqlx";
 import {
   type QueryOptions,
@@ -29,8 +30,40 @@ import {
 } from "./sqlx.ts";
 import type { BindValue } from "../mod.ts";
 
+const {
+  sqlite3_open_v2,
+  sqlite3_close_v2,
+  sqlite3_changes,
+  sqlite3_total_changes,
+  sqlite3_last_insert_rowid,
+  sqlite3_get_autocommit,
+  sqlite3_free,
+  sqlite3_finalize,
+  sqlite3_result_blob,
+  sqlite3_result_double,
+  sqlite3_result_error,
+  sqlite3_result_int64,
+  sqlite3_result_null,
+  sqlite3_result_text,
+  sqlite3_value_blob,
+  sqlite3_value_bytes,
+  sqlite3_value_double,
+  sqlite3_value_int64,
+  sqlite3_value_text,
+  sqlite3_value_type,
+  sqlite3_create_function,
+  sqlite3_result_int,
+  sqlite3_aggregate_context,
+  sqlite3_enable_load_extension,
+  sqlite3_load_extension,
+  sqlite3_backup_init,
+  sqlite3_backup_step,
+  sqlite3_backup_finish,
+  sqlite3_errcode,
+} = ffi;
+
 /** Various options that can be configured when opening Database connection. */
-export interface DatabaseOpenOptions extends SqlxConnectionOptions {
+export interface SqliteConnectionOptions extends SqlxConnectionOptions {
   /** Whether to open database only in read-only mode. By default, this is false. */
   readonly?: boolean;
   /** Whether to create a new database file at specified path if one does not exist already. By default this is true. */
@@ -69,38 +102,6 @@ export interface AggregateFunctionOptions extends FunctionOptions {
   final?: (aggregate: any) => any;
 }
 
-const {
-  sqlite3_open_v2,
-  sqlite3_close_v2,
-  sqlite3_changes,
-  sqlite3_total_changes,
-  sqlite3_last_insert_rowid,
-  sqlite3_get_autocommit,
-  sqlite3_free,
-  sqlite3_finalize,
-  sqlite3_result_blob,
-  sqlite3_result_double,
-  sqlite3_result_error,
-  sqlite3_result_int64,
-  sqlite3_result_null,
-  sqlite3_result_text,
-  sqlite3_value_blob,
-  sqlite3_value_bytes,
-  sqlite3_value_double,
-  sqlite3_value_int64,
-  sqlite3_value_text,
-  sqlite3_value_type,
-  sqlite3_create_function,
-  sqlite3_result_int,
-  sqlite3_aggregate_context,
-  sqlite3_enable_load_extension,
-  sqlite3_load_extension,
-  sqlite3_backup_init,
-  sqlite3_backup_step,
-  sqlite3_backup_finish,
-  sqlite3_errcode,
-} = ffi;
-
 /**
  * Represents a SQLite3 database connection.
  *
@@ -122,12 +123,13 @@ const {
 export class SqliteConnection extends Transactionable implements
   SqlxConnection<
     BindValue,
-    DatabaseOpenOptions,
+    SqliteConnectionOptions,
     QueryOptions,
     SqlxTransactionOptions,
     Transaction,
     SqlxConnectionEventType
   > {
+  readonly sqlxVersion = VERSION;
   /**
    * The connection URL to the database
    */
@@ -135,7 +137,7 @@ export class SqliteConnection extends Transactionable implements
   /**
    * Aditional connection options
    */
-  readonly connectionOptions: DatabaseOpenOptions;
+  readonly connectionOptions: SqliteConnectionOptions;
 
   readonly eventTarget: EventTarget;
 
@@ -195,8 +197,14 @@ export class SqliteConnection extends Transactionable implements
     this.#enableLoadExtension = enabled;
   }
 
-  constructor(connectionUrl: string | URL, options: DatabaseOpenOptions = {}) {
-    super();
+  constructor(
+    connectionUrl: string | URL,
+    options: SqliteConnectionOptions = {},
+  ) {
+    super({
+      int64: options.int64,
+      unsafeConcurrency: options.unsafeConcurrency,
+    });
     this.#pointer = new Uint32Array(2);
 
     this.connectionUrl = connectionUrl instanceof URL

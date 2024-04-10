@@ -1,4 +1,4 @@
-import { SqlxDatabaseError } from "@halvardm/sqlx";
+import { SqlxError } from "@halvardm/sqlx";
 
 export const encoder = new TextEncoder();
 
@@ -10,7 +10,7 @@ export function isObject(value: unknown): boolean {
   return typeof value === "object" && value !== null;
 }
 
-export class SqliteError extends SqlxDatabaseError {
+export class SqliteError extends SqlxError {
   name = "SqliteError";
 
   constructor(

@@ -17,6 +17,7 @@
     "test": "deno test --unstable-ffi -A test/test.ts",
     "build": "deno run -A scripts/build.ts",
     "bench-deno": "deno run -A --unstable-ffi bench/bench_deno.js 50 1000000",
+    "bench-deno-sqlx": "deno run -A --unstable-ffi bench/bench_deno_sqlx.js 50 1000000",
     "bench-deno-ffi": "deno run -A --unstable-ffi bench/bench_deno_ffi.js 50 1000000",
     "bench-deno-wasm": "deno run -A --unstable-ffi bench/bench_deno_wasm.js 50 1000000",
     "bench-node": "node bench/bench_node.js 50 1000000",

@@ -1,8 +1,8 @@
 export {
   type AggregateFunctionOptions,
-  type DatabaseOpenOptions,
   type FunctionOptions,
   SqliteConnection,
+  type SqliteConnectionOptions,
 } from "./src/sqlx-database.ts";
 export { type Transaction } from "./src/sqlx.ts";
 export { type BlobOpenOptions, SQLBlob } from "./src/sqlx-blob.ts";
