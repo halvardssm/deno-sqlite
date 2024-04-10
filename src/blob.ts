@@ -1,4 +1,3 @@
-import type { Database } from "./database.ts";
 import ffi, { unwrap } from "./ffi.ts";
 import { toCString } from "./util.ts";
 
@@ -35,14 +34,14 @@ export interface BlobOpenOptions {
 export class SQLBlob {
   #handle: Deno.PointerValue;
 
-  constructor(db: Database, options: BlobOpenOptions) {
+  constructor(handle: Deno.PointerValue, options: BlobOpenOptions) {
     options = Object.assign({
       readonly: true,
       db: "main",
     }, options);
     const pHandle = new Uint32Array(2);
     unwrap(sqlite3_blob_open(
-      db.unsafeHandle,
+      handle,
       toCString(options.db ?? "main"),
       toCString(options.table),
       toCString(options.column),

@@ -258,7 +258,10 @@ export class Database {
    * @returns Statement object
    */
   prepare(sql: string): Statement {
-    return new Statement(this, sql);
+    return new Statement(this.unsafeHandle, sql, {
+      int64: this.int64,
+      unsafeConcurrency: this.unsafeConcurrency,
+    });
   }
 
   /**
@@ -268,7 +271,7 @@ export class Database {
    * otherwise you will have memory leaks.
    */
   openBlob(options: BlobOpenOptions): SQLBlob {
-    return new SQLBlob(this, options);
+    return new SQLBlob(this.unsafeHandle, options);
   }
 
   /**
@@ -315,7 +318,7 @@ export class Database {
     }
 
     const stmt = this.prepare(sql);
-    stmt.run(...params);
+    stmt.run(params);
     return sqlite3_changes(this.#handle);
   }
 
@@ -331,7 +334,7 @@ export class Database {
   ): T[] {
     const sql = strings.join("?");
     const stmt = this.prepare(sql);
-    return stmt.all(...parameters);
+    return stmt.all(parameters);
   }
 
   /**
