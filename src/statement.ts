@@ -288,12 +288,6 @@ export class Statement {
     if (this.#bindParameterCount === 0) {
       this.#hasNoArgs = true;
     }
-    //   this.all = this.#allNoArgs;
-    //   this.values = this.#valuesNoArgs;
-    //   this.run = this.#runNoArgs;
-    //   this.value = this.#valueNoArgs;
-    //   this.get = this.#getNoArgs;
-    // }
   }
 
   /** Shorthand for `this.callback = true`. Enables calling user defined functions. */

@@ -1,10 +1,9 @@
-export {
-  type AggregateFunctionOptions,
-  type FunctionOptions,
-  SqliteConnection,
-  type SqliteConnectionOptions,
-  type Transaction,
-} from "./src/sqlx.ts";
+export * from "./src/sqlx.ts";
+export * from "./src/connection.ts";
+export * from "./src/errors.ts";
+export * from "./src/events.ts";
+export * from "./src/meta.ts";
+
 export { type BlobOpenOptions, SQLBlob } from "./src/blob.ts";
 export {
   type BindParameters,
