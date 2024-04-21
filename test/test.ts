@@ -7,7 +7,7 @@ import {
   SqliteError,
 } from "../mod.ts";
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
-import { SqliteConnection } from "../sqlx.ts";
+import { SqliteClient } from "../sqlx.ts";
 import { implementationTest } from "@halvardm/sqlx/testing";
 
 console.log("sqlite version:", SQLITE_VERSION);
@@ -603,25 +603,13 @@ Deno.test("sqlite", async (t) => {
 });
 
 Deno.test("sqlite sqlx", async (t) => {
-  await t.step("sourceid", () => {
-    assert(SQLITE_SOURCEID.length > 0);
-  });
-
-  await t.step("is complete", () => {
-    assert(!isComplete(""));
-    assert(!isComplete("select sqlite_version()"));
-
-    assert(isComplete("select x from y;"));
-    assert(isComplete("select sqlite_version();"));
-  });
-
   const DB_URL = new URL("./test.db", import.meta.url);
 
   // Remove any existing test.db.
   await Deno.remove(DB_URL).catch(() => {});
 
   await t.step("open (expect error)", async () => {
-    const db = new SqliteConnection(DB_URL, { create: false });
+    const db = new SqliteClient(DB_URL, { create: false });
     await assertRejects(
       async () => await db.connect(),
       SqliteError,
@@ -630,21 +618,21 @@ Deno.test("sqlite sqlx", async (t) => {
   });
 
   await t.step("open (path string)", async () => {
-    const db = new SqliteConnection("test-path.db");
+    const db = new SqliteClient("test-path.db");
     await db.connect();
     await db.close();
     Deno.removeSync("test-path.db");
   });
 
   await t.step("open (readonly)", async () => {
-    const db = new SqliteConnection(":memory:", { readonly: true });
+    const db = new SqliteClient(":memory:", { readonly: true });
     await db.connect();
     await db.close();
   });
 
-  let db!: SqliteConnection;
+  let db!: SqliteClient;
   await t.step("open (url)", async () => {
-    db = new SqliteConnection(DB_URL, { int64: true });
+    db = new SqliteClient(DB_URL, { int64: true });
     await db.connect();
   });
 
@@ -668,14 +656,6 @@ Deno.test("sqlite sqlx", async (t) => {
     assertEquals(row, { version: SQLITE_VERSION });
   });
 
-  await t.step("autocommit", () => {
-    assertEquals(db.autocommit, true);
-  });
-
-  await t.step("last insert row id", () => {
-    assertEquals(db.lastInsertRowId, 0);
-  });
-
   await t.step("create table", async () => {
     await db.execute(`create table test (
       integer integer,
@@ -687,7 +667,7 @@ Deno.test("sqlite sqlx", async (t) => {
   });
 
   await t.step("insert one", async () => {
-    await db.execute(
+    const changes = await db.execute(
       `insert into test (integer, text, double, blob, nullable)
       values (?, ?, ?, ?, ?)`,
       [
@@ -699,7 +679,7 @@ Deno.test("sqlite sqlx", async (t) => {
       ],
     );
 
-    assertEquals(db.totalChanges, 1);
+    assertEquals(changes, 1);
   });
 
   await t.step("delete inserted row", async () => {
@@ -707,7 +687,7 @@ Deno.test("sqlite sqlx", async (t) => {
   });
 
   await t.step("last insert row id (after insert)", () => {
-    assertEquals(db.lastInsertRowId, 1);
+    assertEquals(db.connection.db.lastInsertRowId, 1);
   });
 
   await t.step("prepared insert", async () => {
@@ -854,7 +834,22 @@ Deno.test("sqlite sqlx implementation", async (t) => {
   await implementationTest({
     t,
     connectionUrl: ":memory:",
-    connectionOptions: { poolSize: 1 },
-    Client: SqliteConnection,
+    connectionOptions: {},
+    Client: SqliteClient,
+    queries: {
+      createTable: "CREATE TABLE IF NOT EXISTS sqlxtesttable (testcol TEXT)",
+      dropTable: "DROP TABLE IF EXISTS sqlxtesttable",
+      insertOneToTable: "INSERT INTO sqlxtesttable (testcol) VALUES (?)",
+      insertManyToTable:
+        "INSERT INTO sqlxtesttable (testcol) VALUES (?),(?),(?)",
+      selectOneFromTable:
+        "SELECT * FROM sqlxtesttable WHERE testcol = ? LIMIT 1",
+      selectByMatchFromTable: "SELECT * FROM sqlxtesttable WHERE testcol = ?",
+      selectManyFromTable: "SELECT * FROM sqlxtesttable",
+      select1AsString: "SELECT '1' as result",
+      select1Plus1AsNumber: "SELECT 1+1 as result",
+      deleteByMatchFromTable: "DELETE FROM sqlxtesttable WHERE testcol = ?",
+      deleteAllFromTable: "DELETE FROM sqlxtesttable",
+    },
   });
 });
