@@ -1,6 +1,6 @@
-import { SqliteConnection } from "../sqlx.ts";
+import { SqliteClient } from "../sqlx.ts";
 
-const db = new SqliteConnection(":memory:", { unsafeConcurrency: true });
+const db = new SqliteClient(":memory:", { unsafeConcurrency: true });
 
 await db.connect();
 
