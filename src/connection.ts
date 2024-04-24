@@ -7,7 +7,6 @@ import {
 import { fromFileUrl } from "@std/path";
 import ffi from "./ffi.ts";
 import { Database, type DatabaseOpenOptions } from "../mod.ts";
-import { SqliteEventTarget } from "./events.ts";
 
 /** Various options that can be configured when opening Database connection. */
 export interface SqliteConnectionOptions
@@ -34,12 +33,10 @@ export interface SqliteConnectionOptions
  */
 export class SqliteConnection extends SqlxBase implements
   SqlxConnection<
-    SqliteEventTarget,
     SqliteConnectionOptions
   > {
   connectionUrl: string;
   connectionOptions: SqliteConnectionOptions;
-  eventTarget: SqliteEventTarget;
 
   /**
    * The FFI SQLite methods.
@@ -73,7 +70,6 @@ export class SqliteConnection extends SqlxBase implements
       ? fromFileUrl(connectionUrl)
       : connectionUrl;
     this.connectionOptions = options;
-    this.eventTarget = new SqliteEventTarget();
   }
 
   async connect(): Promise<void> {

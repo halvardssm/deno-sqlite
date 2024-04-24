@@ -3,8 +3,8 @@ import {
   type Row,
   SqlxBase,
   type SqlxClient,
-  SqlxConnectionCloseEvent,
-  SqlxConnectionConnectEvent,
+  SqlxConnectableCloseEvent,
+  SqlxConnectableConnectEvent,
   type SqlxConnectionOptions,
   type SqlxPreparable,
   type SqlxPreparedQueriable,
@@ -49,7 +49,6 @@ export interface SqliteClientOptions
 
 export class SqlitePrepared extends SqlxBase implements
   SqlxPreparedQueriable<
-    SqliteEventTarget,
     SqliteConnectionOptions,
     SqliteConnection,
     SqliteParameterType,
@@ -136,14 +135,12 @@ export class SqlitePrepared extends SqlxBase implements
  */
 export class SqliteQueriable extends SqlxBase implements
   SqlxQueriable<
-    SqliteEventTarget,
     SqliteConnectionOptions,
     SqliteConnection,
     SqliteParameterType,
     SqliteQueryOptions
   >,
   SqlxPreparable<
-    SqliteEventTarget,
     SqliteConnectionOptions,
     SqliteConnection,
     SqliteParameterType,
@@ -250,7 +247,6 @@ export class SqliteQueriable extends SqlxBase implements
 export class SqliteTransaction extends SqliteQueriable
   implements
     SqlxTransactionQueriable<
-      SqliteEventTarget,
       SqliteConnectionOptions,
       SqliteConnection,
       SqliteParameterType,
@@ -310,7 +306,6 @@ export class SqliteTransaction extends SqliteQueriable
 export class SqliteTransactionable extends SqliteQueriable
   implements
     SqlxTransactionable<
-      SqliteEventTarget,
       SqliteConnectionOptions,
       SqliteConnection,
       SqliteParameterType,
@@ -382,12 +377,12 @@ export class SqliteClient extends SqliteTransactionable implements
   async connect(): Promise<void> {
     await this.connection.connect();
     this.eventTarget.dispatchEvent(
-      new SqlxConnectionConnectEvent({ connectable: this }),
+      new SqlxConnectableConnectEvent({ connectable: this }),
     );
   }
   async close(): Promise<void> {
     this.eventTarget.dispatchEvent(
-      new SqlxConnectionCloseEvent({ connectable: this }),
+      new SqlxConnectableCloseEvent({ connectable: this }),
     );
     await this.connection.close();
   }
