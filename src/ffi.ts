@@ -585,7 +585,7 @@ const symbols = {
     parameters: [],
     result: "i32",
   },
-} as const satisfies Deno.ForeignLibraryInterface;
+} as const;
 
 let lib: Deno.DynamicLibrary<typeof symbols>["symbols"];
 
