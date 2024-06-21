@@ -1,4 +1,4 @@
-import { SqliteClient } from "../../sqlx.ts";
+import { SqliteClient } from "../../std_sql.ts";
 
 const db = new SqliteClient("./bench/northwind.sqlite", {
   unsafeConcurrency: true,

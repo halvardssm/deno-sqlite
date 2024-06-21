@@ -1,38 +1,41 @@
-import {
-  type ArrayRow,
-  type Row,
-  SqlxBase,
-  type SqlxClient,
-  SqlxConnectableCloseEvent,
-  SqlxConnectableConnectEvent,
-  type SqlxConnectionOptions,
-  type SqlxPreparable,
-  type SqlxPreparedQueriable,
-  type SqlxQueriable,
-  type SqlxQueryOptions,
-  type SqlxTransactionable,
-  type SqlxTransactionOptions,
-  type SqlxTransactionQueriable,
-} from "@halvardm/sqlx";
+import type {
+  ArrayRow,
+  Row,
+  SqlClient,
+  SqlConnectionOptions,
+  SqlPreparable,
+  SqlPreparedStatement,
+  SqlQueriable,
+  SqlQueryOptions,
+  SqlTransaction,
+  SqlTransactionable,
+  SqlTransactionOptions,
+} from "@stdext/sql";
 import {
   type BindValue,
   Statement,
   type StatementOptions,
 } from "./statement.ts";
 import type { DatabaseOpenOptions } from "../mod.ts";
-import { SqliteEventTarget } from "./events.ts";
 import {
+  SqliteCloseEvent,
+  SqliteConnectEvent,
+  SqliteEventTarget,
+} from "./events.ts";
+import {
+  SqliteConnectable,
   SqliteConnection,
   type SqliteConnectionOptions,
 } from "./connection.ts";
 import { SqliteTransactionError } from "./errors.ts";
+import { mergeQueryOptions, transformToAsyncGenerator } from "./util.ts";
 
 export type SqliteParameterType = BindValue;
 
-export interface SqliteQueryOptions extends SqlxQueryOptions, StatementOptions {
+export interface SqliteQueryOptions extends SqlQueryOptions, StatementOptions {
 }
 
-export interface SqliteTransactionOptions extends SqlxTransactionOptions {
+export interface SqliteTransactionOptions extends SqlTransactionOptions {
   beginTransactionOptions: {
     behavior?: "DEFERRED" | "IMMEDIATE" | "EXCLUSIVE";
   };
@@ -44,64 +47,56 @@ export interface SqliteTransactionOptions extends SqlxTransactionOptions {
 
 /** Various options that can be configured when opening Database connection. */
 export interface SqliteClientOptions
-  extends SqlxConnectionOptions, DatabaseOpenOptions {
+  extends SqlConnectionOptions, DatabaseOpenOptions {
 }
 
-export class SqlitePrepared extends SqlxBase implements
-  SqlxPreparedQueriable<
-    SqliteConnectionOptions,
-    SqliteConnection,
-    SqliteParameterType,
-    SqliteQueryOptions
-  > {
+export class SqlitePreparedStatement extends SqliteConnectable
+  implements
+    SqlPreparedStatement<
+      SqliteConnectionOptions,
+      SqliteParameterType,
+      SqliteQueryOptions,
+      SqliteConnection
+    > {
   readonly sql: string;
-  readonly queryOptions: SqliteQueryOptions;
-
-  #statement: Statement;
-
-  connection: SqliteConnection;
-
-  get connected(): boolean {
-    return this.connection.connected;
-  }
+  declare readonly options: SqliteConnectionOptions & SqliteQueryOptions;
+  readonly #statement: Statement;
 
   constructor(
-    connection: SqliteConnection,
+    connection: SqlitePreparedStatement["connection"],
     sql: string,
-    options: SqliteQueryOptions = {},
+    options: SqlitePreparedStatement["options"] = {},
   ) {
-    super();
-    this.connection = connection;
+    super(connection, options);
     this.sql = sql;
-    this.queryOptions = options;
 
     this.#statement = new Statement(
       this.connection.db.unsafeHandle,
       this.sql,
-      this.queryOptions,
+      this.options,
     );
   }
 
   execute(
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     _options?: SqliteQueryOptions | undefined,
   ): Promise<number | undefined> {
     return Promise.resolve(this.#statement.run(params));
   }
   query<T extends Row<BindValue> = Row<BindValue>>(
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): Promise<T[]> {
     return Promise.resolve(this.#statement.all<T>(params, options));
   }
   queryOne<T extends Row<BindValue> = Row<BindValue>>(
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): Promise<T | undefined> {
     return Promise.resolve(this.#statement.get<T>(params, options));
   }
   queryMany<T extends Row<BindValue> = Row<BindValue>>(
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): AsyncGenerator<T> {
     return transformToAsyncGenerator(
@@ -109,19 +104,19 @@ export class SqlitePrepared extends SqlxBase implements
     );
   }
   queryArray<T extends ArrayRow<BindValue> = ArrayRow<BindValue>>(
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): Promise<T[]> {
     return Promise.resolve(this.#statement.values<T>(params, options));
   }
   queryOneArray<T extends ArrayRow<BindValue> = ArrayRow<BindValue>>(
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): Promise<T | undefined> {
     return Promise.resolve(this.#statement.value<T>(params, options));
   }
   queryManyArray<T extends ArrayRow<BindValue> = ArrayRow<BindValue>>(
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): AsyncGenerator<T> {
     return transformToAsyncGenerator(
@@ -133,84 +128,77 @@ export class SqlitePrepared extends SqlxBase implements
 /**
  * Represents a base queriable class for SQLite3.
  */
-export class SqliteQueriable extends SqlxBase implements
-  SqlxQueriable<
+export class SqliteQueriable extends SqliteConnectable implements
+  SqlQueriable<
     SqliteConnectionOptions,
-    SqliteConnection,
-    SqliteParameterType,
-    SqliteQueryOptions
-  >,
-  SqlxPreparable<
-    SqliteConnectionOptions,
-    SqliteConnection,
     SqliteParameterType,
     SqliteQueryOptions,
-    SqlitePrepared
+    SqliteConnection
   > {
-  readonly connection: SqliteConnection;
-  readonly queryOptions: SqliteQueryOptions;
-
-  get connected(): boolean {
-    return this.connection.connected;
-  }
+  declare readonly options: SqliteConnectionOptions & SqliteQueryOptions;
 
   constructor(
-    connection: SqliteConnection,
-    queryOptions: SqliteQueryOptions = {},
+    connection: SqliteQueriable["connection"],
+    options: SqliteQueriable["options"] = {},
   ) {
-    super();
-    this.connection = connection;
-    this.queryOptions = queryOptions;
+    super(connection, options);
+  }
+  prepare(sql: string, options?: SqliteQueryOptions): SqlitePreparedStatement {
+    return new SqlitePreparedStatement(
+      this.connection,
+      sql,
+      mergeQueryOptions(this.options, options),
+    );
   }
 
   execute(
     sql: string,
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): Promise<number | undefined> {
     return this.prepare(sql, options).execute(params);
   }
   query<T extends Row<BindValue> = Row<BindValue>>(
     sql: string,
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): Promise<T[]> {
     return this.prepare(sql, options).query<T>(params);
   }
   queryOne<T extends Row<BindValue> = Row<BindValue>>(
     sql: string,
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): Promise<T | undefined> {
     return this.prepare(sql, options).queryOne<T>(params);
   }
   queryMany<T extends Row<BindValue> = Row<BindValue>>(
     sql: string,
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): AsyncGenerator<T> {
     return this.prepare(sql, options).queryMany<T>(params);
   }
   queryArray<T extends ArrayRow<BindValue> = ArrayRow<BindValue>>(
     sql: string,
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): Promise<T[]> {
     return this.prepare(sql, options).queryArray<T>(params);
   }
   queryOneArray<T extends ArrayRow<BindValue> = ArrayRow<BindValue>>(
     sql: string,
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): Promise<T | undefined> {
     return this.prepare(sql, options).queryOneArray<T>(params);
   }
   queryManyArray<T extends ArrayRow<BindValue> = ArrayRow<BindValue>>(
     sql: string,
-    params?: BindValue[] | undefined,
+    params?: SqliteParameterType[],
     options?: SqliteQueryOptions | undefined,
   ): AsyncGenerator<T> {
-    return this.prepare(sql, options).queryManyArray<T>(params);
+    return this.connection.queryManyArray<T>(sql, params, options);
   }
 
   sql<T extends Row<BindValue> = Row<BindValue>>(
@@ -218,7 +206,7 @@ export class SqliteQueriable extends SqlxBase implements
     ...parameters: BindValue[]
   ): Promise<T[]> {
     const sql = strings.join("?");
-    return this.query(sql, parameters);
+    return this.query<T>(sql, parameters);
   }
 
   sqlArray<T extends ArrayRow<BindValue> = ArrayRow<BindValue>>(
@@ -226,31 +214,28 @@ export class SqliteQueriable extends SqlxBase implements
     ...parameters: BindValue[]
   ): Promise<T[]> {
     const sql = strings.join("?");
-    return this.queryArray(sql, parameters);
-  }
-
-  prepare(
-    sql: string,
-    options?: SqliteQueryOptions | undefined,
-  ): SqlitePrepared {
-    return new SqlitePrepared(
-      this.connection,
-      sql,
-      mergeQueryOptions(this.queryOptions, options),
-    );
+    return this.queryArray<T>(sql, parameters);
   }
 }
 
-/**
- * Represents a SQLite3 transaction.
- */
+export class SqlitePreparable extends SqliteQueriable implements
+  SqlPreparable<
+    SqliteConnectionOptions,
+    SqliteParameterType,
+    SqliteQueryOptions,
+    SqliteConnection,
+    SqlitePreparedStatement
+  > {
+}
+
 export class SqliteTransaction extends SqliteQueriable
   implements
-    SqlxTransactionQueriable<
+    SqlTransaction<
       SqliteConnectionOptions,
-      SqliteConnection,
       SqliteParameterType,
       SqliteQueryOptions,
+      SqliteConnection,
+      SqlitePreparedStatement,
       SqliteTransactionOptions
     > {
   #inTransaction: boolean = true;
@@ -303,13 +288,14 @@ export class SqliteTransaction extends SqliteQueriable
 /**
  * Represents a queriable class that can be used to run transactions.
  */
-export class SqliteTransactionable extends SqliteQueriable
+export class SqliteTransactionable extends SqlitePreparable
   implements
-    SqlxTransactionable<
+    SqlTransactionable<
       SqliteConnectionOptions,
-      SqliteConnection,
       SqliteParameterType,
       SqliteQueryOptions,
+      SqliteConnection,
+      SqlitePreparedStatement,
       SqliteTransactionOptions,
       SqliteTransaction
     > {
@@ -322,7 +308,7 @@ export class SqliteTransactionable extends SqliteQueriable
     }
     await this.execute(sql);
 
-    return new SqliteTransaction(this.connection, this.queryOptions);
+    return new SqliteTransaction(this.connection, this.options);
   }
 
   async transaction<T>(
@@ -350,39 +336,36 @@ export class SqliteTransactionable extends SqliteQueriable
  * Sqlite client
  */
 export class SqliteClient extends SqliteTransactionable implements
-  SqlxClient<
+  SqlClient<
     SqliteEventTarget,
     SqliteConnectionOptions,
-    SqliteConnection,
     SqliteParameterType,
     SqliteQueryOptions,
-    SqlitePrepared,
+    SqliteConnection,
+    SqlitePreparedStatement,
     SqliteTransactionOptions,
     SqliteTransaction
   > {
-  eventTarget: SqliteEventTarget;
-  connectionUrl: string;
-  connectionOptions: SqliteConnectionOptions;
+  readonly eventTarget: SqliteEventTarget;
 
   constructor(
     connectionUrl: string | URL,
-    connectionOptions: SqliteClientOptions = {},
+    options: SqliteClientOptions = {},
   ) {
-    const conn = new SqliteConnection(connectionUrl, connectionOptions);
-    super(conn);
-    this.connectionUrl = connectionUrl.toString();
-    this.connectionOptions = connectionOptions;
+    const conn = new SqliteConnection(connectionUrl, options);
+    super(conn, options);
     this.eventTarget = new SqliteEventTarget();
   }
+
   async connect(): Promise<void> {
     await this.connection.connect();
     this.eventTarget.dispatchEvent(
-      new SqlxConnectableConnectEvent({ connectable: this }),
+      new SqliteConnectEvent({ connection: this.connection }),
     );
   }
   async close(): Promise<void> {
     this.eventTarget.dispatchEvent(
-      new SqlxConnectableCloseEvent({ connectable: this }),
+      new SqliteCloseEvent({ connection: this.connection }),
     );
     await this.connection.close();
   }
@@ -390,25 +373,4 @@ export class SqliteClient extends SqliteTransactionable implements
   async [Symbol.asyncDispose](): Promise<void> {
     await this.close();
   }
-}
-
-function transformToAsyncGenerator<
-  T extends unknown,
-  I extends IterableIterator<T>,
->(iterableIterator: I): AsyncGenerator<T> {
-  return iterableIterator as unknown as AsyncGenerator<T>;
-}
-
-function mergeQueryOptions(
-  ...options: (SqliteQueryOptions | undefined)[]
-): SqliteQueryOptions {
-  const mergedOptions: SqliteQueryOptions = {};
-
-  for (const option of options) {
-    if (option) {
-      Object.assign(mergedOptions, option);
-    }
-  }
-
-  return mergedOptions;
 }

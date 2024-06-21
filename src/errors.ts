@@ -1,6 +1,6 @@
-import { isSqlxError, SqlxError } from "@halvardm/sqlx";
+import { isSqlError, SqlError } from "@stdext/sql";
 
-export class SqliteError extends SqlxError {
+export class SqliteError extends SqlError {
   constructor(msg: string) {
     super(msg);
   }
@@ -16,5 +16,5 @@ export class SqliteTransactionError extends SqliteError {
  * Check if an error is a SqliteError
  */
 export function isSqliteError(err: unknown): err is SqliteError {
-  return isSqlxError(err) && err instanceof SqliteError;
+  return isSqlError(err) && err instanceof SqliteError;
 }

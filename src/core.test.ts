@@ -1,8 +1,15 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { SQLITE_VERSION } from "./ffi.ts";
-import { SqliteClient, type SqliteParameterType } from "./sqlx.ts";
-import { clientTest } from "@halvardm/sqlx/testing";
+import {
+  SqliteClient,
+  type SqliteParameterType,
+  SqlitePreparedStatement,
+  SqliteTransaction,
+} from "./core.ts";
+import { sqlIntegrationTestSuite, sqlUnitTestSuite } from "@stdext/sql/testing";
 import { SqliteError } from "./util.ts";
+import { SqliteConnection } from "./connection.ts";
+import { SqliteEventTarget } from "./events.ts";
 
 Deno.test("sqlite sqlx", async (t) => {
   const DB_URL = new URL("./test.db", import.meta.url);
@@ -232,26 +239,38 @@ Deno.test("sqlite sqlx", async (t) => {
   });
 });
 
-Deno.test("SQLx Test", async (t) => {
-  await clientTest({
-    t,
-    Client: SqliteClient,
-    connectionUrl: ":memory:",
-    connectionOptions: {},
-    queries: {
-      createTable: "CREATE TABLE IF NOT EXISTS sqlxtesttable (testcol TEXT)",
-      dropTable: "DROP TABLE IF EXISTS sqlxtesttable",
-      insertOneToTable: "INSERT INTO sqlxtesttable (testcol) VALUES (?)",
-      insertManyToTable:
-        "INSERT INTO sqlxtesttable (testcol) VALUES (?),(?),(?)",
-      selectOneFromTable:
-        "SELECT * FROM sqlxtesttable WHERE testcol = ? LIMIT 1",
-      selectByMatchFromTable: "SELECT * FROM sqlxtesttable WHERE testcol = ?",
-      selectManyFromTable: "SELECT * FROM sqlxtesttable",
-      select1AsString: "SELECT '1' as result",
-      select1Plus1AsNumber: "SELECT 1+1 as result",
-      deleteByMatchFromTable: "DELETE FROM sqlxtesttable WHERE testcol = ?",
-      deleteAllFromTable: "DELETE FROM sqlxtesttable",
-    },
-  });
+const connectionUrl = ":memory:";
+const options: SqliteTransaction["options"] = {};
+const sql = "SELECT 1 as one;";
+
+const connection = new SqliteConnection(connectionUrl, options);
+await connection.connect();
+const preparedStatement = new SqlitePreparedStatement(
+  connection,
+  sql,
+  options,
+);
+const transaction = new SqliteTransaction(connection, options);
+const eventTarget = new SqliteEventTarget();
+const client = new SqliteClient(connectionUrl, options);
+
+sqlUnitTestSuite({
+  testPrefix: "sql",
+  connectionClass: connection,
+  preparedStatementClass: preparedStatement,
+  transactionClass: transaction,
+  eventTargetClass: eventTarget,
+  clientClass: client,
+  checks: {
+    connectionUrl,
+    options,
+    clientPoolOptions: options,
+    sql,
+  },
+});
+
+sqlIntegrationTestSuite({
+  testPrefix: "sql",
+  Client: SqliteClient,
+  clientArguments: [connectionUrl, options],
 });

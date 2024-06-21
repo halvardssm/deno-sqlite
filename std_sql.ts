@@ -1,4 +1,4 @@
-export * from "./src/sqlx.ts";
+export * from "./src/core.ts";
 export * from "./src/connection.ts";
 export * from "./src/errors.ts";
 export * from "./src/events.ts";

@@ -1,4 +1,5 @@
-import { SqlxError } from "@halvardm/sqlx";
+import { SqlError } from "@stdext/sql";
+import type { SqliteQueryOptions } from "./core.ts";
 
 export const encoder = new TextEncoder();
 
@@ -10,7 +11,7 @@ export function isObject(value: unknown): boolean {
   return typeof value === "object" && value !== null;
 }
 
-export class SqliteError extends SqlxError {
+export class SqliteError extends SqlError {
   name = "SqliteError";
 
   constructor(
@@ -24,3 +25,24 @@ export class SqliteError extends SqlxError {
 export const buf = Deno.UnsafePointerView.getArrayBuffer;
 
 export const readCstr = Deno.UnsafePointerView.getCString;
+
+export function transformToAsyncGenerator<
+  T extends unknown,
+  I extends IterableIterator<T>,
+>(iterableIterator: I): AsyncGenerator<T> {
+  return iterableIterator as unknown as AsyncGenerator<T>;
+}
+
+export function mergeQueryOptions(
+  ...options: (SqliteQueryOptions | undefined)[]
+): SqliteQueryOptions {
+  const mergedOptions: SqliteQueryOptions = {};
+
+  for (const option of options) {
+    if (option) {
+      Object.assign(mergedOptions, option);
+    }
+  }
+
+  return mergedOptions;
+}

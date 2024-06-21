@@ -1,34 +1,33 @@
 import {
-  type SqlxClientEventType,
-  SqlxConnectableCloseEvent,
-  SqlxConnectableConnectEvent,
-  type SqlxConnectableEventInit,
-  SqlxEventTarget,
-} from "@halvardm/sqlx";
+  type SqlClientEventType,
+  SqlCloseEvent,
+  SqlConnectEvent,
+  type SqlConnectionEventInit,
+  SqlEventTarget,
+} from "@stdext/sql";
 import type {
   SqliteConnection,
   SqliteConnectionOptions,
 } from "./connection.ts";
-import type { SqliteClient } from "./sqlx.ts";
 
-export class SqliteEventTarget extends SqlxEventTarget<
+export class SqliteEventTarget extends SqlEventTarget<
   SqliteConnectionOptions,
   SqliteConnection,
-  SqlxClientEventType,
-  SqliteClientConnectionEventInit,
+  SqlClientEventType,
+  SqliteConnectionEventInit,
   SqliteEvents
 > {
 }
 
-export type SqliteClientConnectionEventInit = SqlxConnectableEventInit<
-  SqliteClient
+export type SqliteConnectionEventInit = SqlConnectionEventInit<
+  SqliteConnection
 >;
 
-export class SqliteConnectionConnectEvent
-  extends SqlxConnectableConnectEvent<SqliteClientConnectionEventInit> {}
-export class SqliteConnectionCloseEvent
-  extends SqlxConnectableCloseEvent<SqliteClientConnectionEventInit> {}
+export class SqliteConnectEvent
+  extends SqlConnectEvent<SqliteConnectionEventInit> {}
+export class SqliteCloseEvent
+  extends SqlCloseEvent<SqliteConnectionEventInit> {}
 
 export type SqliteEvents =
-  | SqliteConnectionConnectEvent
-  | SqliteConnectionCloseEvent;
+  | SqliteConnectEvent
+  | SqliteCloseEvent;

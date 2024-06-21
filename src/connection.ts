@@ -1,16 +1,20 @@
 // deno-lint-ignore-file require-await
-import {
-  SqlxBase,
-  type SqlxConnection,
-  type SqlxConnectionOptions,
-} from "@halvardm/sqlx";
+import type {
+  ArrayRow,
+  Row,
+  SqlConnectable,
+  SqlConnection,
+  SqlConnectionOptions,
+} from "@stdext/sql";
 import { fromFileUrl } from "@std/path";
 import ffi from "./ffi.ts";
 import { Database, type DatabaseOpenOptions } from "../mod.ts";
+import type { SqliteParameterType, SqliteQueryOptions } from "./core.ts";
+import { transformToAsyncGenerator } from "./util.ts";
 
 /** Various options that can be configured when opening Database connection. */
 export interface SqliteConnectionOptions
-  extends SqlxConnectionOptions, DatabaseOpenOptions {
+  extends SqlConnectionOptions, DatabaseOpenOptions {
 }
 
 /**
@@ -31,12 +35,14 @@ export interface SqliteConnectionOptions
  * const db = new SqliteClient(new URL("./myfile.db", import.meta.url));
  * ```
  */
-export class SqliteConnection extends SqlxBase implements
-  SqlxConnection<
-    SqliteConnectionOptions
+export class SqliteConnection implements
+  SqlConnection<
+    SqliteConnectionOptions,
+    SqliteParameterType,
+    SqliteQueryOptions
   > {
-  connectionUrl: string;
-  connectionOptions: SqliteConnectionOptions;
+  readonly connectionUrl: string;
+  readonly options: SqliteConnectionOptions;
 
   /**
    * The FFI SQLite methods.
@@ -64,21 +70,45 @@ export class SqliteConnection extends SqlxBase implements
     connectionUrl: string | URL,
     options: SqliteConnectionOptions = {},
   ) {
-    super();
-
     this.connectionUrl = connectionUrl instanceof URL
       ? fromFileUrl(connectionUrl)
       : connectionUrl;
-    this.connectionOptions = options;
+    this.options = options;
   }
 
   async connect(): Promise<void> {
-    this.db = new Database(this.connectionUrl, this.connectionOptions);
+    this.db = new Database(this.connectionUrl, this.options);
   }
 
   async close(): Promise<void> {
     this._db?.close();
     this._db = null;
+  }
+
+  execute(
+    sql: string,
+    params?: SqliteParameterType[],
+    _options?: SqliteQueryOptions,
+  ): Promise<number | undefined> {
+    return Promise.resolve(this.db.exec(sql, ...(params || [])));
+  }
+  queryMany<T extends Row<any> = Row<any>>(
+    sql: string,
+    params?: SqliteParameterType[],
+    options?: SqliteQueryOptions,
+  ): AsyncGenerator<T, any, unknown> {
+    return transformToAsyncGenerator(
+      this.db.prepare(sql).getMany<T>(params, options),
+    );
+  }
+  queryManyArray<T extends ArrayRow<any> = ArrayRow<any>>(
+    sql: string,
+    params?: SqliteParameterType[],
+    options?: SqliteQueryOptions,
+  ): AsyncGenerator<T, any, unknown> {
+    return transformToAsyncGenerator(
+      this.db.prepare(sql).valueMany<T>(params, options),
+    );
   }
 
   async [Symbol.asyncDispose](): Promise<void> {
@@ -87,5 +117,28 @@ export class SqliteConnection extends SqlxBase implements
 
   [Symbol.for("Deno.customInspect")](): string {
     return `SQLite3.SqliteConnection { path: ${this.connectionUrl} }`;
+  }
+}
+
+export class SqliteConnectable implements
+  SqlConnectable<
+    SqliteConnectionOptions,
+    SqliteConnection
+  > {
+  readonly connection: SqliteConnection;
+  readonly options: SqliteConnectionOptions;
+  get connected(): boolean {
+    return this.connection.connected;
+  }
+
+  constructor(
+    connection: SqliteConnectable["connection"],
+    options: SqliteConnectable["options"] = {},
+  ) {
+    this.connection = connection;
+    this.options = options;
+  }
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.connection.close();
   }
 }
