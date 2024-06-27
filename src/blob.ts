@@ -45,11 +45,13 @@ export class SQLBlob {
       toCString(options.db ?? "main"),
       toCString(options.table),
       toCString(options.column),
-      options.row,
+      BigInt(options.row),
       options.readonly === false ? 1 : 0,
       pHandle,
     ));
-    this.#handle = Deno.UnsafePointer.create(pHandle[0] + 2 ** 32 * pHandle[1]);
+    this.#handle = Deno.UnsafePointer.create(
+      BigInt(pHandle[0] + 2 ** 32 * pHandle[1]),
+    );
   }
 
   /** Byte size of the Blob */

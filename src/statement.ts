@@ -1,4 +1,4 @@
-import { readCstr, toCString } from "./util.ts";
+import { isBigintValidInteger, readCstr, toCString } from "./util.ts";
 import ffi, { unwrap } from "./ffi.ts";
 import {
   SQLITE3_DONE,
@@ -78,8 +78,6 @@ const JSON_SUBTYPE = 74;
 function getColumn(handle: Deno.PointerValue, i: number, int64: boolean): any {
   const ty = sqlite3_column_type(handle, i);
 
-  if (ty === SQLITE_INTEGER && !int64) return sqlite3_column_int(handle, i);
-
   switch (ty) {
     case SQLITE_TEXT: {
       const ptr = sqlite3_column_text(handle, i);
@@ -98,7 +96,16 @@ function getColumn(handle: Deno.PointerValue, i: number, int64: boolean): any {
     }
 
     case SQLITE_INTEGER: {
-      return sqlite3_column_int64(handle, i);
+      let res;
+      if (int64) {
+        res = sqlite3_column_int64(handle, i);
+        if (isBigintValidInteger(res)) {
+          res = Number(res);
+        }
+      } else {
+        res = sqlite3_column_int(handle, i);
+      }
+      return res;
     }
 
     case SQLITE_FLOAT: {
@@ -279,7 +286,9 @@ export class Statement {
       ),
       this.dbPointer,
     );
-    this.#handle = Deno.UnsafePointer.create(pHandle[0] + 2 ** 32 * pHandle[1]);
+    this.#handle = Deno.UnsafePointer.create(
+      BigInt(pHandle[0] + 2 ** 32 * pHandle[1]),
+    );
     STATEMENTS_TO_DB.set(this.#handle, this.dbPointer);
     this.#finalizerToken = { handle: this.#handle };
     statementFinalizer.register(this, this.#handle, this.#finalizerToken);

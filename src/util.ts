@@ -46,3 +46,10 @@ export function mergeQueryOptions(
 
   return mergedOptions;
 }
+
+/**
+ * Check if a bigint can be converted to a valid integer.
+ */
+export function isBigintValidInteger(value: bigint | number): boolean {
+  return value <= Number.MAX_SAFE_INTEGER && value >= Number.MIN_SAFE_INTEGER;
+}
