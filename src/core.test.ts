@@ -3,15 +3,90 @@ import { SQLITE_VERSION } from "./ffi.ts";
 import {
   SqliteClient,
   type SqliteParameterType,
+  type SqlitePreparable,
   SqlitePreparedStatement,
+  type SqliteQueriable,
   SqliteTransaction,
+  type SqliteTransactionable,
 } from "./core.ts";
-import { sqlIntegrationTestSuite, sqlUnitTestSuite } from "@stdext/sql/testing";
 import { SqliteError } from "./util.ts";
 import { SqliteConnection } from "./connection.ts";
 import { SqliteEventTarget } from "./events.ts";
+import {
+  testClientConnection,
+  testSqlClient,
+  testSqlEventTarget,
+  testSqlPreparedStatement,
+  testSqlTransaction,
+} from "@stdext/sql/testing";
+import {
+  isSqlPreparable,
+  isSqlTransaction,
+  isSqlTransactionable,
+} from "@stdext/sql";
 
-Deno.test("sqlite sqlx", async (t) => {
+Deno.test(`sql/type test`, async (t) => {
+  const connectionUrl = ":memory:";
+  const options: SqliteTransaction["options"] = {};
+  const sql = "SELECT 1 as one;";
+
+  await using connection = new SqliteConnection(connectionUrl, options);
+  await connection.connect();
+  const preparedStatement = new SqlitePreparedStatement(
+    connection,
+    sql,
+    options,
+  );
+  const transaction = new SqliteTransaction(connection, options);
+  const eventTarget = new SqliteEventTarget();
+  const client = new SqliteClient(connectionUrl, options);
+
+  const expects = {
+    connectionUrl,
+    options,
+    clientPoolOptions: options,
+    sql,
+  };
+
+  await t.step(`sql/PreparedStatement`, () => {
+    testSqlPreparedStatement(preparedStatement, expects);
+  });
+
+  await t.step(`sql/SqlTransaction`, () => {
+    testSqlTransaction(transaction, expects);
+  });
+
+  await t.step(`sql/SqlTransactionable`, () => {
+    testSqlEventTarget(eventTarget);
+  });
+  await t.step(`sql/SqlTransactionable`, () => {
+    testSqlClient(client, expects);
+  });
+});
+
+Deno.test("Client Test", async (t) => {
+  const connectionUrl = ":memory:";
+
+  testSqlClient(new SqliteClient(connectionUrl), {
+    connectionUrl: connectionUrl,
+    options: {},
+  });
+
+  await testClientConnection(t, SqliteClient, [connectionUrl, {}]);
+  await using client = new SqliteClient(connectionUrl);
+  await client.connect();
+  await client.execute("DROP TABLE IF EXISTS sqltesttable");
+  await client.execute(
+    "CREATE TABLE IF NOT EXISTS sqltesttable (testcol TEXT)",
+  );
+  try {
+    await testTransactionable(client);
+  } finally {
+    await client.execute("DROP TABLE IF EXISTS sqltesttable");
+  }
+});
+
+Deno.test("sqlite core", async (t) => {
   const DB_URL = new URL("./test.db", import.meta.url);
 
   // Remove any existing test.db.
@@ -239,38 +314,167 @@ Deno.test("sqlite sqlx", async (t) => {
   });
 });
 
-const connectionUrl = ":memory:";
-const options: SqliteTransaction["options"] = {};
-const sql = "SELECT 1 as one;";
+async function testQueriable(
+  queriable: SqliteQueriable,
+): Promise<void> {
+  await queriable.execute("DELETE FROM sqltesttable");
 
-const connection = new SqliteConnection(connectionUrl, options);
-await connection.connect();
-const preparedStatement = new SqlitePreparedStatement(
-  connection,
-  sql,
-  options,
-);
-const transaction = new SqliteTransaction(connection, options);
-const eventTarget = new SqliteEventTarget();
-const client = new SqliteClient(connectionUrl, options);
+  const resultExecute = await queriable.execute(
+    "INSERT INTO sqltesttable (testcol) VALUES (?),(?),(?)",
+    ["queriable 1", "queriable 2", "queriable 3"],
+  );
+  assertEquals(resultExecute, 3);
 
-sqlUnitTestSuite({
-  testPrefix: "sql",
-  connectionClass: connection,
-  preparedStatementClass: preparedStatement,
-  transactionClass: transaction,
-  eventTargetClass: eventTarget,
-  clientClass: client,
-  checks: {
-    connectionUrl,
-    options,
-    clientPoolOptions: options,
-    sql,
-  },
-});
+  const resultQuery = await queriable.query("SELECT * FROM sqltesttable");
+  assertEquals(resultQuery, [
+    { testcol: "queriable 1" },
+    { testcol: "queriable 2" },
+    { testcol: "queriable 3" },
+  ]);
 
-sqlIntegrationTestSuite({
-  testPrefix: "sql",
-  Client: SqliteClient,
-  clientArguments: [connectionUrl, options],
-});
+  const resultQueryOne = await queriable.queryOne(
+    "SELECT * FROM sqltesttable WHERE testcol LIKE ?",
+    ["queriable%"],
+  );
+  assertEquals(resultQueryOne, { testcol: "queriable 1" });
+
+  const resultQueryMany = await Array.fromAsync(
+    queriable.queryMany("SELECT * FROM sqltesttable WHERE testcol LIKE ?", [
+      "queriable%",
+    ]),
+  );
+  assertEquals(resultQueryMany, [
+    { testcol: "queriable 1" },
+    { testcol: "queriable 2" },
+    { testcol: "queriable 3" },
+  ]);
+
+  const resultQueryArray = await queriable.queryArray(
+    "SELECT * FROM sqltesttable WHERE testcol LIKE ?",
+    ["queriable%"],
+  );
+  assertEquals(resultQueryArray, [
+    ["queriable 1"],
+    ["queriable 2"],
+    ["queriable 3"],
+  ]);
+
+  const resultQueryOneArray = await queriable.queryOneArray(
+    "SELECT * FROM sqltesttable WHERE testcol LIKE ?",
+    ["queriable%"],
+  );
+  assertEquals(resultQueryOneArray, ["queriable 1"]);
+
+  const resultQueryManyArray = await Array.fromAsync(
+    queriable.queryManyArray(
+      "SELECT * FROM sqltesttable WHERE testcol LIKE ?",
+      ["queriable%"],
+    ),
+  );
+  assertEquals(resultQueryManyArray, [
+    ["queriable 1"],
+    ["queriable 2"],
+    ["queriable 3"],
+  ]);
+
+  const resultSql = await queriable
+    .sql`SELECT * FROM sqltesttable WHERE testcol LIKE ${"queriable%"}`;
+  assertEquals(resultSql, [
+    { testcol: "queriable 1" },
+    { testcol: "queriable 2" },
+    { testcol: "queriable 3" },
+  ]);
+
+  const resultSqlArray = await queriable
+    .sqlArray`SELECT * FROM sqltesttable WHERE testcol LIKE ${"queriable%"}`;
+  assertEquals(resultSqlArray, [
+    ["queriable 1"],
+    ["queriable 2"],
+    ["queriable 3"],
+  ]);
+}
+
+async function testPreparedStatement(
+  preparedStatement: SqlitePreparedStatement,
+): Promise<void> {
+  const resultExecute = await preparedStatement.execute(["queriable%"]);
+  assertEquals(resultExecute, 3);
+
+  const resultQuery = await preparedStatement.query(["queriable%"]);
+  assertEquals(resultQuery, [
+    { testcol: "queriable 1" },
+    { testcol: "queriable 2" },
+    { testcol: "queriable 3" },
+  ]);
+
+  const resultQueryOne = await preparedStatement.queryOne(["queriable%"]);
+  assertEquals(resultQueryOne, { testcol: "queriable 1" });
+
+  const resultQueryMany = await Array.fromAsync(
+    preparedStatement.queryMany(["queriable%"]),
+  );
+  assertEquals(resultQueryMany, [
+    { testcol: "queriable 1" },
+    { testcol: "queriable 2" },
+    { testcol: "queriable 3" },
+  ]);
+
+  const resultQueryArray = await preparedStatement.queryArray(["queriable%"]);
+  assertEquals(resultQueryArray, [
+    ["queriable 1"],
+    ["queriable 2"],
+    ["queriable 3"],
+  ]);
+
+  const resultQueryOneArray = await preparedStatement.queryOneArray([
+    "queriable%",
+  ]);
+  assertEquals(resultQueryOneArray, ["queriable 1"]);
+
+  const resultQueryManyArray = await Array.fromAsync(
+    preparedStatement.queryManyArray(["queriable%"]),
+  );
+  assertEquals(resultQueryManyArray, [
+    ["queriable 1"],
+    ["queriable 2"],
+    ["queriable 3"],
+  ]);
+}
+
+async function testPreparable(
+  preparable: SqlitePreparable,
+): Promise<void> {
+  // Testing properties
+  isSqlPreparable(preparable);
+
+  // Testing inherited classes
+  await testQueriable(preparable);
+
+  // Testing methods
+  const prepared = preparable.prepare(
+    "SELECT * FROM sqltesttable WHERE testcol LIKE ?",
+  );
+  await testPreparedStatement(prepared);
+}
+async function testTransaction(
+  transaction: SqliteTransaction,
+): Promise<void> {
+  // Testing properties
+  isSqlTransaction(transaction);
+
+  // Testing inherited classes
+  await testPreparable(transaction);
+}
+async function testTransactionable(
+  transactionable: SqliteTransactionable,
+): Promise<void> {
+  // Testing properties
+  isSqlTransactionable(transactionable);
+
+  // Testing inherited classes
+  await testPreparable(transactionable);
+
+  // Testing methods
+  const transaction = await transactionable.beginTransaction();
+  await testTransaction(transaction);
+}
